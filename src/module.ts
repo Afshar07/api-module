@@ -103,6 +103,7 @@ export default defineNuxtModule<IModuleOptions>({
     })
     addTemplate({
       filename: 'provider.ts',
+      write: true,
       getContents: () => `
       ${generateProviderFile()}
       `,
