@@ -1,6 +1,6 @@
 {
   "name": "api-module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Personal nuxt module for api",
   "repository": "afshar07/api-module",
   "license": "MIT",
