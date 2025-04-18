@@ -25,7 +25,7 @@ export default defineNuxtModule<IModuleOptions>({
 
     const { resolve: resolveServices } = createResolver(nuxt.options.rootDir)
 
-    const servicesDir = resolveServices('services')
+    const servicesDir = resolveServices('app/services')
     const servicesFiles = await resolveFiles(servicesDir, '*.{js,ts}')
 
     if (!servicesFiles || !servicesFiles.length) {

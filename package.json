@@ -35,7 +35,10 @@
   },
   "dependencies": {
     "@nuxt/kit": "^3.16.2",
-    "defu": "^6.1.4"
+    "defu": "^6.1.4",
+    "knitwork": "^1.2.0",
+    "ofetch": "^1.4.1",
+    "pathe": "^2.0.3"
   },
   "devDependencies": {
     "@nuxt/devtools": "^2.4.0",
