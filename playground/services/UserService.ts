@@ -1,4 +1,4 @@
-export interface IExampleUser {
+export interface IExampleUser2 {
   mobile: string
   name: string
   id: number

@@ -1,5 +1,16 @@
-import { defineNuxtModule, addPlugin, createResolver, addImportsDir, addImports, useLogger, resolveFiles, addTemplate, addTypeTemplate } from '@nuxt/kit'
-import { genInterface } from 'knitwork'
+import {
+  defineNuxtModule,
+  addPlugin,
+  createResolver,
+  addImportsDir,
+  addImports,
+  useLogger,
+  resolveFiles,
+  addTemplate,
+  addTypeTemplate,
+  updateTemplates,
+} from '@nuxt/kit'
+import { genInterface, genImport } from 'knitwork'
 
 import { defu } from 'defu'
 import { filename } from 'pathe/utils'
@@ -23,13 +34,18 @@ export default defineNuxtModule<IModuleOptions>({
       logger.warn('\'baseUrl\' option is not filled, Using \'/\' as the base URL.')
     }
 
+    const isV4Compatible = nuxt.options.future.compatibilityVersion == 4
+
     const { resolve: resolveServices } = createResolver(nuxt.options.rootDir)
 
-    const servicesDir = resolveServices('app/services')
-    const servicesFiles = await resolveFiles(servicesDir, '*.{js,ts}')
+    const servicesDir = resolveServices(isV4Compatible ? 'app/services' : 'services')
+
+    let servicesFiles = await resolveFiles(servicesDir, '*.{js,ts}')
 
     if (!servicesFiles || !servicesFiles.length) {
-      logger.warn('No Service files found in service directory, provider not generated!')
+      logger.warn(
+        'No Service files found in service directory, provider not generated!',
+      )
       return
     }
 
@@ -40,8 +56,10 @@ export default defineNuxtModule<IModuleOptions>({
       const name = filename(serviceFile)
 
       if (name) {
-        servicesFileNames.push(name)
-        fileTypes[name] = name
+        if (!servicesFileNames.includes(name))
+          servicesFileNames.push(name)
+        if (!fileTypes[name])
+          fileTypes[name] = name
       }
     })
 
@@ -74,19 +92,44 @@ export default defineNuxtModule<IModuleOptions>({
       return contents
     }
 
-    function generateProviderFile() {
-      let contents = `
-      export default
-      `
+    interface IImportExportResult {
+      imports: string
+      instances: string
+    }
 
-      contents += `
-      {
-      `
+    function createImportAndExportForProvider(): IImportExportResult {
+      const payload: IImportExportResult = {
+        imports: '',
+        instances: '',
+      }
+
       for (let i = 0; i < servicesFileNames.length; i++) {
-        contents += `
-          ${servicesFileNames[i]}: new ${servicesFileNames[i]}(useHttpClient)${i < servicesFileNames.length ? ',' : ''}
+        payload.imports += `
+        ${genImport('@/services/' + servicesFileNames[i], servicesFileNames[i])}
+        `
+
+        payload.instances += `
+          ${servicesFileNames[i]}: new ${servicesFileNames[i]}(useHttpClient)${
+            i < servicesFileNames.length ? ',' : ''
+          }
         `
       }
+
+      return payload
+    }
+
+    function generateProviderFile() {
+      const importExportResult: IImportExportResult = createImportAndExportForProvider()
+      let contents = `
+      `
+
+      contents += importExportResult.imports
+
+      contents += `
+      export default
+      {
+      `
+      contents += importExportResult.instances
 
       contents += `
     }
@@ -97,7 +140,7 @@ export default defineNuxtModule<IModuleOptions>({
 
     addTypeTemplate({
       filename: 'types/apiProvider.d.ts',
-      getContents: () => /* ts */`
+      getContents: () => /* ts */ `
       ${generateTypeTemplate()}
       `,
     })
@@ -109,7 +152,48 @@ export default defineNuxtModule<IModuleOptions>({
       `,
     })
 
-    nuxt.options.runtimeConfig.public.api = defu<IModuleOptions, IModuleOptions[]>(nuxt.options.runtimeConfig.public.api, {
+    nuxt.hook('builder:watch', async (event, relativePath) => {
+      if (event === 'change' && !relativePath.startsWith('services')) {
+        return
+      }
+
+      servicesFiles = await resolveFiles(servicesDir, '*.{js,ts}')
+      for (let i = 0; i < servicesFiles.length; i++) {
+        const name = filename(servicesFiles[i])
+        if (name) {
+          if (!servicesFileNames.includes(name))
+            servicesFileNames.push(name)
+          if (!fileTypes[name])
+            fileTypes[name] = name
+        }
+      }
+      await updateTemplates({
+        filter: (template) => {
+          return template.filename === 'provider.ts'
+        },
+      })
+    })
+
+    nuxt.hook('vite:extendConfig', (config) => {
+      config.server.watch = {
+        
+      }
+      if (!config.server) config.server = {}
+      if (!config.server.hmr) config.server.hmr = {}
+
+      // Force the HMR system to check for changes in the plugin
+      const pluginPath = resolve(nuxt.options.buildDir, 'provider.ts')
+      // config.server.hmr = 
+      config.server.hmr.include = config.server.hmr. || []
+      if (!config.server.hmr.include.includes(pluginPath)) {
+        config.server.hmr.include.push(pluginPath)
+      }
+    })
+
+    nuxt.options.runtimeConfig.public.api = defu<
+      IModuleOptions,
+      IModuleOptions[]
+    >(nuxt.options.runtimeConfig.public.api, {
       baseUrl: '/',
     })
 
